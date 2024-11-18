@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -106,6 +107,12 @@ func main() {
 				"FormatDateTime": formatDateTime,
 			}).ParseFS(templates, "templates/*")),
 	}
+	staticFS, err := fs.Sub(static, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fileServer := http.FileServer(http.FileSystem(http.FS(staticFS)))
+	e.GET("/static/*", echo.WrapHandler(http.StripPrefix("/static/", fileServer)))
 
 	e.GET("/", func(c echo.Context) error {
 		var todos []Todo
