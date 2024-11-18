@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"text/template"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -17,6 +20,12 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/extra/bundebug"
 )
+
+//go:embed static
+var static embed.FS
+
+//go:embed templates
+var templates embed.FS
 
 type Todo struct {
 	bun.BaseModel `bun:"table:todos,alias:t"`
@@ -49,6 +58,21 @@ func customFunc(todo *Todo) func([]string) []error {
 	}
 }
 
+type Templates struct {
+	templates *template.Template
+}
+
+func (t *Templates) Render(w io.Writer, name string, date interface{}, c echo.Context) error {
+	return t.templates.ExecuteTemplate(w, name, date)
+}
+
+func formatDateTime(d time.Time) string {
+	if d.IsZero() {
+		return ""
+	}
+	return d.Format("2006-01-02 15:04")
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -76,6 +100,13 @@ func main() {
 	}
 
 	e := echo.New()
+	e.Renderer = &Templates{
+		templates: template.Must(template.New("").
+			Funcs(template.FuncMap{
+				"FormatDateTime": formatDateTime,
+			}).ParseFS(templates, "templates/*")),
+	}
+
 	e.GET("/", func(c echo.Context) error {
 		var todos []Todo
 		ctx := context.Background()
